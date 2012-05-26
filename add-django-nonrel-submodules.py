@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import os.path
 import argparse
 import subprocess
 
@@ -61,7 +62,7 @@ def remove_symlink(path):
 		execute_command("rm -f %s" % path)
 
 def remove_git_submodule(submodule):
-	if not only_symlinks:
+	if not only_symlinks and os.path.exists("%s%s" % (lib_folder,submodule)):
 		if not skip_git:
 			execute_command("git rm --cached --ignore-unmatch %s%s" % (lib_folder,submodule))
 			execute_command("git config -f .git/config --remove-section submodule.%s%s" % (lib_folder,submodule))
