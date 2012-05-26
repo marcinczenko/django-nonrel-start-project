@@ -36,6 +36,10 @@ Command line options:
       -s                    If present, only creates or deletes symlinks.
       -l                    Lists the (sub)modules to be installed and exits.
       -c                    Removes submodules and then exits.
+      -n                    Only prints the commands but does not execute them.
+	  --keep-symlinks       Symlinks will not be affected by any command.
+	  --skip-git-cmds       Commands operating on git repository will not be
+	                        executed.
 
 
 # How to use this stuff in the *INTENDED* way.
@@ -58,7 +62,23 @@ So let's rock. Say you created submodules from the _develop_ branch and you woul
 
     $ python add-django-nonrel-submodules.py -c -s
 
-The `-c` option says clean all, but than `-s` option says "relax" I will actually only remove symlinks.
+The `-c` option says clean all, but than `-s` option says "relax" I will actually only remove symlinks. If you do not specify the `-s` option then `-c` will do the following:
+
+1. It will first remove the symlinks (it does not remove the symlink for an extra module like _docs_ because no symlink will be created in such a case).
+
+2. It will issue the following _git_ commands for each (sub)module:
+
+        git rm --cached --ignore-unmatch <path_to_submodule>
+        git config -f .git/config --remove-section submodule.<path_to_submodule>
+        git config -f .gitmodules --remove-section submodule.<path_to_submodule>
+        rm -Rf .git/modules/<path_to_submodule>
+
+    See also the description of the `--skip-git-cmds` and `--keep-symlinks` options in the _Installing or deleting only one selected module_ section below.
+
+3. It will remove the destination lib folder.
+
+**NOTE** The script _.gitmodules_ will not be deleted - you may have other submodules in your project.
+
 Now, you can create submodules for your master branch:
 
     $ python add-django-nonrel-submodules.py -b master -f your_master_branch_folder
@@ -85,9 +105,21 @@ Option `-l` lists all available module. Know to delete a specific module you do:
 
     $ python add-django-nonrel-submodules.py -d <module_name>
 
-That's it. Both the submodule and the link will be removed.
+That's it. Both the submodule and the link will be removed. When removing the module from the git repository the following commands are executed:
 
-**NOTE** The script does not touch you _.gitmodules_ file, nor it will try to fix your git archive. The only thing it ever (yes ever) doing with git is `git submodule add`.
+    git rm --cached --ignore-unmatch <path_to_submodule>
+	git config -f .git/config --remove-section submodule.<path_to_submodule>
+	git config -f .gitmodules --remove-section submodule.<path_to_submodule>
+    rm -Rf .git/modules/<path_to_submodule>
+
+Sometimes you may want to skip these commands (especially when any of them fails - than it will cause the whole script to fails). For this you have the
+`--skip-git-cmds`:
+
+    $ python add-django-nonrel-submodules.py -d <module_name> --skip-git-cmds
+
+And finally, sometimes you may want to remove submodules but actually keep the symlinks (this may happen when you have another _lib_ folder with different branch and you do not want to use it anymore). The option you may be looking for in such a case is `--keep-symlinks`:
+
+    $ python add-django-nonrel-submodules.py -d <module_name> --keep-symlinks
 
 If you only wanted to remove symlink but leave the submodule in place, you have the `-s` option.
 

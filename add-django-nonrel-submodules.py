@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+import os.path
 import argparse
 import subprocess
 
@@ -45,14 +46,52 @@ def execute_command(cmd):
 	else:
 		if 0 != len(output):
 			print output
-	
-def clean_and_exit():
+
+def add_git_submodule(root,module_descriptor):
+	if not only_symlinks and not skip_git:
+		if module_descriptor['force-default-branch'] or branch_name == module_descriptor['default-branch']:
+			execute_command("git submodule add %s%s.git %s%s" % (root,module_descriptor['git-module'],lib_folder,module_descriptor['git-module']))
+		else:
+			execute_command("git submodule add -b %s %s%s.git %s%s" % (branch_name,root,module_descriptor['git-module'],lib_folder,module_descriptor['git-module']))
+
+def link_module(module_descriptor):
+	execute_command("ln -s %s%s %s" % (lib_folder,module_descriptor['source'],module_descriptor['target']))
+			
+def remove_symlink(path):
+	if not keep_symlinks:
+		execute_command("rm -f %s" % path)
+
+def remove_git_submodule(submodule):
+	if not only_symlinks and os.path.exists("%s%s" % (lib_folder,submodule)):
+		if not skip_git:
+			execute_command("git rm --cached --ignore-unmatch %s%s" % (lib_folder,submodule))
+			execute_command("git config -f .git/config --remove-section submodule.%s%s" % (lib_folder,submodule))
+			execute_command("git config -f .gitmodules --remove-section submodule.%s%s" % (lib_folder,submodule))
+		execute_command("rm -Rf .git/modules/%s%s" % (lib_folder,submodule))
+
+def remove_submodule_folder(submodule):
+	if not only_symlinks:
+		execute_command("rm -rf %s%s" % (lib_folder,submodule))
+
+def remove_lib_folder():
 	if not only_symlinks:
 		execute_command("rm -rf %s" % lib_folder)
-	for module_descriptor in django_nonrel_git_repositories:
-		execute_command("rm -f %s" % module_descriptor['target'])
-	for module_descriptor in adieu_django_autoload_git_repository:
-		execute_command("rm -f %s" % module_descriptor['target'])
+
+def clean_repositories(repositories):
+	for module_descriptor in repositories:
+		remove_symlink(module_descriptor['target'])
+		remove_git_submodule(module_descriptor['git-module'])
+
+def clean_extras(repositories):
+	for module_descriptor in repositories:
+		remove_git_submodule(module_descriptor['git-module'])
+
+	
+def clean_and_exit():
+	clean_repositories(django_nonrel_git_repositories)
+	clean_repositories(adieu_django_autoload_git_repository)
+	clean_extras(extras)
+	remove_lib_folder()
 	sys.exit(0)
 		
 def add_submodules(git_root,modules):
@@ -61,31 +100,19 @@ def add_submodules(git_root,modules):
 
 def add_extras(git_root,modules):
 	for module_descriptor in modules:
-		if not only_symlinks:
-			add_git_submodule(git_root,module_descriptor)
+		add_git_submodule(git_root,module_descriptor)
 
 def delete_submodule(module_descriptor):
-	execute_command("rm -f %s" % module_descriptor['target'])
-	if not only_symlinks:
-		execute_command("rm -rf %s%s" % (lib_folder,module_descriptor['git-module']))
+	remove_symlink(module_descriptor['target'])
+	remove_git_submodule(module_descriptor['git-module'])
+	remove_submodule_folder(module_descriptor['git-module'])
 
 def delete_extra(module_descriptor):
-	if not only_symlinks:
-		execute_command("rm -rf %s%s" % (lib_folder,module_descriptor['git-module']))
+	remove_git_submodule(module_descriptor['git-module'])
+	remove_submodule_folder(module_descriptor['git-module'])
 
-		
-def add_git_submodule(root,module_descriptor):
-	if module_descriptor['force-default-branch'] or branch_name == module_descriptor['default-branch']:
-		execute_command("git submodule add %s%s.git %s%s" % (root,module_descriptor['git-module'],lib_folder,module_descriptor['git-module']))
-	else:
-		execute_command("git submodule add -b %s %s%s.git %s%s" % (branch_name,root,module_descriptor['git-module'],lib_folder,module_descriptor['git-module']))
-
-def link_module(module_descriptor):
-	execute_command("ln -s %s%s %s" % (lib_folder,module_descriptor['source'],module_descriptor['target']))
-		
 def install_module(root,module_descriptor):
-	if not only_symlinks:
-		add_git_submodule(root,module_descriptor)
+	add_git_submodule(root,module_descriptor)
 	link_module(module_descriptor)
 	
 def add_module_and_exit(module_name):
@@ -144,6 +171,8 @@ parser.add_argument('-s',action="store_true",default=False,dest="only_symlinks",
 parser.add_argument('-l',action="store_true",default=False,dest="list_modules_only",help="Lists the (sub)modules to be installed and exits.")
 parser.add_argument('-c',action="store_true",default=False,dest="clean_only",help="Removes submodules and then exits.")
 parser.add_argument('-n',action="store_true",default=False,dest="preview_only",help="Only prints the commands but does not execute them.")
+parser.add_argument('--keep-symlinks',action="store_true",default=False,dest="keep_symlinks",help="Symlinks will not be affected by any command.")
+parser.add_argument('--skip-git-cmds',action="store_true",default=False,dest="skip_git",help="Commands operating on git repository will not be executed.")
 
 cmd_line_args = parser.parse_args()
 branch_name = cmd_line_args.branch_name
@@ -155,6 +184,8 @@ lib_folder = add_trailing_slash(cmd_line_args.lib_folder)
 module_name = cmd_line_args.module_name
 delete_module_name = cmd_line_args.delete_module_name
 preview_only = cmd_line_args.preview_only
+keep_symlinks = cmd_line_args.keep_symlinks
+skip_git = cmd_line_args.skip_git
 
 if clean_only:
 	clean_and_exit()
