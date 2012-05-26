@@ -1,3 +1,7 @@
+*.tmproj
+.DS_Store
+.gaedata
+
 *.py[co]
 
 # Packages
